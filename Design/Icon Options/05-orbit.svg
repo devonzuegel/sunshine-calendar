@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256"><defs><linearGradient id="i5bg" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#4084ed"/><stop offset="1" stop-color="#204fa7"/></linearGradient><clipPath id="i5clip"><rect x="16" y="16" width="224" height="224" rx="49"/></clipPath></defs><rect x="18" y="22" width="220" height="221" rx="49" fill="#182132" opacity=".09"/><rect x="16" y="16" width="224" height="224" rx="49" fill="url(#i5bg)"/><g clip-path="url(#i5clip)">
+<ellipse cx="128" cy="128" rx="100" ry="58" transform="rotate(-38 128 128)" fill="none" stroke="#b9d8ff" stroke-opacity=".5" stroke-width="3"/>
+<circle cx="128" cy="128" r="65" fill="#f6f8ff"/>
+<circle cx="128" cy="128" r="57" fill="none" stroke="#d7e2f7" stroke-width="2"/>
+<path d="M128 87V129L157 145" fill="none" stroke="#254f8e" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="128" cy="129" r="6" fill="#254f8e"/>
+<circle cx="200" cy="68" r="14" fill="#ffb39b"/><circle cx="52" cy="186" r="7" fill="#bdeadc"/>
+</g><rect x="16.5" y="16.5" width="223" height="223" rx="48.5" fill="none" stroke="white" stroke-opacity=".28"/></svg>

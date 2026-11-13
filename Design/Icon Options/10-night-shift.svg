@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256"><defs><linearGradient id="i10bg" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#243e5a"/><stop offset="1" stop-color="#101e34"/></linearGradient><clipPath id="i10clip"><rect x="16" y="16" width="224" height="224" rx="49"/></clipPath></defs><rect x="18" y="22" width="220" height="221" rx="49" fill="#182132" opacity=".09"/><rect x="16" y="16" width="224" height="224" rx="49" fill="url(#i10bg)"/><g clip-path="url(#i10clip)">
+<path d="M175 40A53 53 0 1 0 214 122A46 46 0 0 1 175 40Z" fill="#f5e6bd"/>
+<circle cx="58" cy="56" r="3" fill="#e7ecf0"/><circle cx="107" cy="43" r="2.5" fill="#e7ecf0"/><circle cx="215" cy="176" r="3" fill="#a7c8d8"/>
+<rect x="43" y="123" width="107" height="27" rx="8" fill="#7ccfc8"/>
+<rect x="43" y="161" width="144" height="34" rx="9" fill="#bfc9ed"/>
+<path d="M55 131V141M55 171V185" stroke="#213b55" stroke-width="4" stroke-linecap="round" opacity=".5"/>
+</g><rect x="16.5" y="16.5" width="223" height="223" rx="48.5" fill="none" stroke="white" stroke-opacity=".28"/></svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256"><defs><linearGradient id="i2bg" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#26b4ad"/><stop offset="1" stop-color="#087f86"/></linearGradient><clipPath id="i2clip"><rect x="16" y="16" width="224" height="224" rx="49"/></clipPath></defs><rect x="18" y="22" width="220" height="221" rx="49" fill="#182132" opacity=".09"/><rect x="16" y="16" width="224" height="224" rx="49" fill="url(#i2bg)"/><g clip-path="url(#i2clip)">
+<rect x="40" y="46" width="176" height="167" rx="20" fill="#fff" opacity=".13"/>
+<path d="M97 47V213M157 47V213M40 91H216M40 137H216M40 182H216" stroke="#fff" stroke-opacity=".17"/>
+<rect x="50" y="58" width="91" height="36" rx="9" fill="#fffaf0"/>
+<rect x="110" y="103" width="95" height="39" rx="9" fill="#ffd1a8"/>
+<rect x="50" y="151" width="112" height="47" rx="10" fill="#c5e9ff"/>
+<path d="M63 69V83M123 114V130M63 163V186" stroke="#075c69" stroke-width="4" stroke-linecap="round" opacity=".55"/>
+</g><rect x="16.5" y="16.5" width="223" height="223" rx="48.5" fill="none" stroke="white" stroke-opacity=".28"/></svg>

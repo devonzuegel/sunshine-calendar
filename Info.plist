@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>CFBundleIdentifier</key><string>com.devon.calendarstudio</string>
+<key>CFBundleName</key><string>Sunshine Calendar</string>
+<key>CFBundleDisplayName</key><string>Sunshine Calendar</string>
+<key>CFBundleIconFile</key><string>CalendarStudio</string>
+<key>CFBundleExecutable</key><string>CalendarStudio</string>
+<key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>0.1</string>
+<key>CFBundleVersion</key><string>1</string>
+<key>LSMinimumSystemVersion</key><string>14.0</string>
+<key>NSLocationUsageDescription</key><string>Sunshine Calendar uses your location to shade calendar hours before sunrise and after sunset. Sun times are calculated on your Mac.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>Sunshine Calendar uses your location to shade calendar hours before sunrise and after sunset. Sun times are calculated on your Mac.</string>
+<key>NSHighResolutionCapable</key><true/>
+<key>NSCalendarsFullAccessUsageDescription</key><string>Sunshine Calendar shows your calendars and lets you create, edit, and move selected events together.</string>
+<key>UTExportedTypeDeclarations</key><array><dict>
+<key>UTTypeIdentifier</key><string>com.devon.calendarstudio.bank-task</string>
+<key>UTTypeDescription</key><string>Sunshine Calendar Bank Task</string>
+<key>UTTypeConformsTo</key><array><string>public.data</string></array>
+</dict><dict><key>UTTypeIdentifier</key><string>com.devon.calendarstudio.calendar-events</string><key>UTTypeDescription</key><string>Sunshine Calendar Events</string><key>UTTypeConformsTo</key><array><string>public.data</string></array></dict><dict><key>UTTypeIdentifier</key><string>com.devon.calendarstudio.new-task</string><key>UTTypeDescription</key><string>New Sunshine Calendar Task</string><key>UTTypeConformsTo</key><array><string>public.data</string></array></dict></array>
+</dict></plist>

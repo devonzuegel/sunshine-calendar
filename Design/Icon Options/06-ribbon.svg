@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256"><defs><linearGradient id="i6bg" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#f08275"/><stop offset="1" stop-color="#d85455"/></linearGradient><clipPath id="i6clip"><rect x="16" y="16" width="224" height="224" rx="49"/></clipPath></defs><rect x="18" y="22" width="220" height="221" rx="49" fill="#182132" opacity=".09"/><rect x="16" y="16" width="224" height="224" rx="49" fill="url(#i6bg)"/><g clip-path="url(#i6clip)">
+<path d="M176 77C151 54 101 57 78 85C47 123 66 176 106 189C131 198 163 191 179 173" fill="none" stroke="#b53f49" stroke-opacity=".25" stroke-width="35" stroke-linecap="round" transform="translate(0 6)"/>
+<path d="M176 71C151 48 101 51 78 79C47 117 66 170 106 183C131 192 163 185 179 167" fill="none" stroke="#fff4df" stroke-width="35" stroke-linecap="round"/>
+<path d="M76 82Q61 110 77 140" fill="none" stroke="#ffd6ae" stroke-width="35"/>
+<path d="M165 61L187 80L164 92" fill="none" stroke="#fff4df" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+</g><rect x="16.5" y="16.5" width="223" height="223" rx="48.5" fill="none" stroke="white" stroke-opacity=".28"/></svg>

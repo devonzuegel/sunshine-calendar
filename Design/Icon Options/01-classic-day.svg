@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256"><defs><linearGradient id="i1bg" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#fffefb"/><stop offset="1" stop-color="#ecebe5"/></linearGradient><clipPath id="i1clip"><rect x="16" y="16" width="224" height="224" rx="49"/></clipPath></defs><rect x="18" y="22" width="220" height="221" rx="49" fill="#182132" opacity=".09"/><rect x="16" y="16" width="224" height="224" rx="49" fill="url(#i1bg)"/><g clip-path="url(#i1clip)">
+<path d="M16 83V65Q16 16 65 16H191Q240 16 240 65V83Z" fill="#f34e56"/>
+<path d="M17 81H239" stroke="#b52e3a" stroke-opacity=".25"/>
+<text x="128" y="61" font-family="Arial" font-size="16" font-weight="700" letter-spacing="3" fill="white" text-anchor="middle">CAL</text>
+<path d="M46 112H210M46 150H210M46 188H210" stroke="#d7d5ce" stroke-width="1" opacity=".4"/>
+<text x="128" y="201" font-family="Arial" font-size="105" font-weight="400" fill="#252b30" text-anchor="middle">12</text>
+</g><rect x="16.5" y="16.5" width="223" height="223" rx="48.5" fill="none" stroke="white" stroke-opacity=".28"/></svg>
