@@ -44,7 +44,7 @@ import AppKit
         let base = Date(timeIntervalSince1970:0)
         func interval(_ id: String,_ start: Double,_ end: Double) -> TimedInterval { TimedInterval(id:id,start:base.addingTimeInterval(start),end:base.addingTimeInterval(end)) }
         let layout = OverlapLayout.columns([interval("a",0,100),interval("b",50,150),interval("c",100,200),interval("d",200,300)])
-        check(layout["a"]!.count == 2 && layout["c"]!.count == 2, "Overlap chain uses two columns")
+        check(layout["a"]!.count == 1 && layout["c"]!.count == 1, "Staggered starts retain full readable width")
         check(layout["a"]!.column == layout["c"]!.column, "Column reused when previous event ends")
         check(layout["d"]!.count == 1, "Touching event starts new overlap group")
         check(OverlapLayout.columns([interval("a",0,100),interval("b",0,100),interval("c",0,100)])["a"]!.count == 3, "Three simultaneous events")
@@ -54,21 +54,17 @@ import AppKit
             interval("early1",0,3600), interval("early2",0,3600), interval("early3",0,3600),
             interval("later1",1800,5400), interval("later2",1800,5400), interval("later3",1800,5400)
         ])
-        check(stacked.values.allSatisfy { $0.count == 6 }, "All concurrent events receive separate lanes")
-        check(stacked["later1"]!.column == 3, "Later events cannot cover active earlier events")
+        check(stacked.values.allSatisfy { $0.count == 3 }, "Equal starts share columns within each staggered row")
+        check(stacked["later1"]!.depth == 1, "Later rows overlap with a small inset")
         let adjacent = OverlapLayout.columns([interval("a",0,1800),interval("b",1800,3600)])
         check(adjacent.values.allSatisfy { $0.count == 1 && $0.span == 1 }, "Nonoverlapping events keep full width without inset")
         let mixed = [interval("green1",0,60),interval("teal1",40,100),interval("green2",60,90),interval("green3",90,120)]
         let mixedLayout = OverlapLayout.columns(mixed)
         check(["green1","green2","green3"].allSatisfy { mixedLayout[$0]!.column == 0 }, "Successive events reuse the left edge instead of stair-stepping")
         let expanded = OverlapLayout.columns([interval("long",0,300),interval("a",0,60),interval("b",0,60),interval("later",60,120)])
-        check(expanded["later"]!.column == 1 && expanded["later"]!.span == 2, "Events expand into unoccupied neighboring lanes")
-        for first in mixed {
-            for second in mixed where first.id != second.id && first.start < second.end && first.end > second.start {
-                let a = mixedLayout[first.id]!, b = mixedLayout[second.id]!
-                check(a.column+a.span <= b.column || b.column+b.span <= a.column, "Simultaneous events never cover one another")
-            }
-        }
+        check(expanded["later"]!.column == 0 && expanded["later"]!.count == 1 && expanded["later"]!.depth == 1, "Later single events use nearly full width")
+        check(mixedLayout["green1"]!.depth == 0 && mixedLayout["green2"]!.depth == 0 && mixedLayout["green3"]!.depth == 0, "Successive events reuse the leftmost inset while another event continues")
+        check(mixedLayout["teal1"]!.depth == 1, "Nested task overlaps its earlier event with a small inset")
         var swipe = DayScrollGesture()
         check(swipe.consume(x:-10,y:1,time:0,began:true).days == 0, "Small horizontal movement waits for intent")
         check(swipe.consume(x:-24,y:0,time:0.01).days == 1, "Leftward content swipe reveals next day")
@@ -192,6 +188,29 @@ import AppKit
         let trip = bars.first(where:{ $0.id == "trip" })!, nextTrip = bars.first(where:{ $0.id == "next-trip" })!
         check(trip.firstDay == 1 && trip.endDay == 3, "All-day exclusive end does not paint an extra day")
         check(trip.row == nextTrip.row && trip.row != bars[0].row, "Touching trips reuse a row while simultaneous bars remain separate")
+        let protectedCards = [NSRect(x:0,y:0,width:200,height:43),NSRect(x:7,y:10,width:193,height:48),NSRect(x:0,y:30,width:200,height:50)]
+        let protectedLabels = ProtectedTitleLayout.frames(protectedCards)
+        check(!protectedLabels[0].intersects(protectedLabels[1]) && !protectedLabels[1].intersects(protectedLabels[2]), "Overlapping event titles shift within their cards to stay readable")
+        check(zip(protectedCards,protectedLabels).allSatisfy { $0.contains($1) }, "Protected titles stay within actual event duration bounds")
+        let separatedLabels = ProtectedTitleLayout.frames([NSRect(x:0,y:0,width:100,height:40),NSRect(x:100,y:0,width:100,height:40)])
+        check(separatedLabels[0].minY == separatedLabels[1].minY, "Side-by-side event titles keep their natural top alignment")
+        let remembered = CalendarModel(bank:bank,reconnectIfAuthorized:false)
+        remembered.jump(to:Calendar.current.startOfDay(for:Date()).addingTimeInterval(-86400))
+        remembered.select("three",extending:false)
+        remembered.selected = [] // Starting an empty-slot drag clears selection.
+        remembered.newEvent(durationMinutes:30)
+        check(remembered.draft?.calendarID == "personal", "New event uses the last selected event calendar even after clearing selection")
+        remembered.select("one",extending:false)
+        remembered.newEvent()
+        check(remembered.draft?.calendarID == "work", "Selecting an event in another calendar changes creation calendar")
+        remembered.select("three",extending:true)
+        check(remembered.creationCalendar?.id == "personal", "Most recently selected event wins during multiselection")
+        remembered.select("three",extending:true)
+        check(remembered.creationCalendar?.id == "personal", "Deselecting an event does not change the remembered creation calendar")
+        remembered.select("four",extending:false)
+        check(remembered.creationCalendar?.id == "personal", "Read-only calendars cannot become the creation destination")
+        remembered.sources.removeAll { $0.id == "personal" }
+        check(remembered.creationCalendar?.id == "work", "Unavailable remembered calendar falls back to an editable calendar")
         do { count += try EventBankTests.run() } catch { fatalError("Event bank checks failed: \(error)") }
         print("Passed \(count) calendar behavior checks.")
     }

@@ -19,7 +19,9 @@ open "build/Sunshine Calendar.app"
 
 Open `build/Sunshine Calendar.app`. It starts with sample calendars until full Calendar access is granted. After that, it reconnects automatically on launch and remembers calendar visibility choices. Sample edits last until the app closes.
 
-- Command-click events to select or deselect them.
+- Command-click events to select or deselect them. Selecting an editable event sets its calendar as the default for new events and bank tasks until you select an event in another calendar.
+- Staggered overlapping events use layered cards with protected title labels; labels shift within the actual event bounds where space allows. Card heights follow duration, with compact text for short events.
+- Calendar dropdowns show the same calendar colors as the sidebar.
 - Drag any selected event to shift the entire group. Vertical movement snaps to 15 minutes; horizontal movement shifts by days.
 - Command-Z undoes the last group move; Shift-Command-Z redoes it.
 - Escape cancels a drag and clears selection.

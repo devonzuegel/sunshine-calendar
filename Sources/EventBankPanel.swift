@@ -110,7 +110,7 @@ struct EventBankPanel: View {
         .onReceive(NotificationCenter.default.publisher(for:NSApplication.didBecomeActiveNotification)) { _ in bank.refresh() }
     }
     private func addTask(minutes: Int = 30) {
-        guard let source = model.sources.first(where:{ $0.writable && model.visible.contains($0.id) }) ?? model.sources.first(where:\.writable) else { return }
+        guard let source = model.creationCalendar else { return }
         editing = BankTask(title:"",minutes:minutes,calendarID:source.id,calendarTitle:source.title,account:source.account)
         collapsed = false
     }
@@ -291,9 +291,11 @@ struct BankTaskEditor: View {
                 if preset == 0 {
                     HStack { Text("Minutes"); Spacer(); TextField("Minutes",value:$task.minutes,format:.number).frame(width:85); Stepper("",value:$task.minutes,in:1...10080).labelsHidden() }
                 }
-                Picker("Calendar",selection:$task.calendarID) {
-                    Text("Choose a calendar").tag("")
-                    ForEach(model.sources.filter(\.writable)) { source in Text("\(source.title) · \(source.account)").tag(source.id) }
+                HStack {
+                    Text("Calendar")
+                    Spacer()
+                    CalendarColorPicker(sources:model.sources.filter(\.writable),selection:$task.calendarID)
+                        .frame(maxWidth:350)
                 }
                 TextField("Notes (optional)",text:$task.notes,axis:.vertical).lineLimit(3...6)
             }.formStyle(.grouped)

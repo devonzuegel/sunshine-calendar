@@ -11,40 +11,51 @@ struct EventColumn {
     var column: Int
     var count: Int
     var span: Int = 1
+    var depth: Int = 0
 }
 enum OverlapLayout {
-    // Assign each event the leftmost free lane across its whole duration.
-    // Reuse lanes at touching boundaries and expand into free lanes to the right.
+    // Equal starts share columns; staggered starts overlay with a small inset.
+    // Reuse the lowest free inset so successive events return to the left edge.
     static func columns(_ items: [TimedInterval]) -> [String: EventColumn] {
         let sorted = items.sorted {
             $0.start == $1.start ? ($0.end == $1.end ? $0.id < $1.id : $0.end > $1.end) : $0.start < $1.start
         }
         var result: [String: EventColumn] = [:]
-        var group: [TimedInterval] = []
-        var groupEnd = Date.distantPast
-        func flush() {
-            guard !group.isEmpty else { return }
-            var lanes: [[TimedInterval]] = []
-            var placements: [(TimedInterval,Int)] = []
-            for item in group {
-                let column = lanes.firstIndex(where:{ $0.last!.end <= item.start }) ?? lanes.count
-                if column == lanes.count { lanes.append([]) }
-                lanes[column].append(item); placements.append((item,column))
+        var active: [(end: Date, depth: Int)] = []
+        var index = 0
+        while index < sorted.count {
+            let start = sorted[index].start
+            var endIndex = index+1
+            while endIndex < sorted.count && sorted[endIndex].start == start { endIndex += 1 }
+            active.removeAll { $0.end <= start }
+            let occupied = Set(active.map(\.depth))
+            var depth = 0
+            while occupied.contains(depth) { depth += 1 }
+            let band = Array(sorted[index..<endIndex])
+            for (column,item) in band.enumerated() {
+                result[item.id] = EventColumn(column:column,count:band.count,depth:depth)
             }
-            for (item,column) in placements {
-                var span = 1
-                for next in (column+1)..<lanes.count {
-                    if lanes[next].contains(where:{ $0.start < item.end && $0.end > item.start }) { break }
-                    span += 1
-                }
-                result[item.id] = EventColumn(column:column,count:lanes.count,span:span)
+            active.append((band.map(\.end).max()!,depth))
+            index = endIndex
+        }
+        return result
+    }
+}
+
+enum ProtectedTitleLayout {
+    static func frames(_ cards: [NSRect]) -> [NSRect] {
+        var placed: [NSRect] = []
+        for card in cards {
+            let height = min(14,max(1,card.height-4))
+            var label = NSRect(x:card.minX+11,y:card.minY+2,width:max(1,card.width-15),height:height)
+            // Move only the label, never the event's actual start/end geometry.
+            for previous in placed.sorted(by:{ $0.minY < $1.minY }) where label.intersects(previous) {
+                let next = previous.maxY+2
+                if next+height <= card.maxY-1 { label.origin.y = next }
             }
+            placed.append(label)
         }
-        for item in sorted {
-            if item.start >= groupEnd { flush(); group = [] }
-            group.append(item); groupEnd = max(groupEnd,item.end)
-        }
-        flush(); return result
+        return placed
     }
 }
 
@@ -300,14 +311,26 @@ struct WeekCanvas: NSViewRepresentable {
             let start = day(d), end = day(d+1)
             let items = displayed.filter { !$0.allDay && $0.start < end && $0.end > start }
             let placements = OverlapLayout.columns(items.map { TimedInterval(id:$0.id,start:max(start,$0.start),end:min(end,$0.end)) })
+            var cards: [(CalendarEntry,NSRect)] = []
             for item in items.sorted(by: { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }) {
                 guard let placement = placements[item.id] else { continue }
                 let begin = max(start,item.start), finish = min(end,item.end)
                 let y = top + CGFloat(begin.timeIntervalSince(start) / 3600) * CalendarMath.hourHeight
-                let height = max(19,CGFloat(finish.timeIntervalSince(begin) / 3600) * CalendarMath.hourHeight - 2)
+                let height = max(1,CGFloat(finish.timeIntervalSince(begin) / 3600) * CalendarMath.hourHeight - 1)
                 let width = (dayWidth - 5) / CGFloat(placement.count)
-                let rect = NSRect(x:gutter + CGFloat(d)*dayWidth + 3 + CGFloat(placement.column)*width,y:y+1,width:max(1,width*CGFloat(placement.span)-2),height:height)
-                drawEvent(item, rect:rect)
+                let inset = min(CGFloat(placement.depth)*7,width*0.16)
+                let rect = NSRect(x:gutter + CGFloat(d)*dayWidth + 3 + CGFloat(placement.column)*width+inset,y:y+0.5,width:max(1,width-2-inset),height:height)
+                cards.append((item,rect))
+            }
+            let overlapping = cards.indices.filter { index in
+                cards.indices.contains { $0 != index && cards[index].1.intersects(cards[$0].1) }
+            }
+            for (index,card) in cards.enumerated() {
+                drawEvent(card.0,rect:card.1,backgroundOnly:overlapping.contains(index))
+            }
+            let labelFrames = ProtectedTitleLayout.frames(cards.map { $0.1 })
+            for index in overlapping {
+                drawProtectedTitle(cards[index].0,frame:labelFrames[index])
             }
         }
         let allDayItems = displayed.filter(\.allDay)
@@ -365,7 +388,7 @@ struct WeekCanvas: NSViewRepresentable {
             text(label,rect:badge.insetBy(dx:8,dy:5),size:11,color:.textBackgroundColor,weight:.medium)
         }
     }
-    func drawEvent(_ item: CalendarEntry, rect: NSRect, registerHit: Bool = true) {
+    func drawEvent(_ item: CalendarEntry, rect: NSRect, registerHit: Bool = true, backgroundOnly: Bool = false) {
         let selected = model.selected.contains(item.id)
         let dark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let tint = item.color.usingColorSpace(.deviceRGB) ?? item.color
@@ -376,20 +399,26 @@ struct WeekCanvas: NSViewRepresentable {
         fill.setFill(); path.fill()
         if selected { tint.setStroke(); path.lineWidth = 1.5; path.stroke() }
         tint.setFill()
-        NSBezierPath(roundedRect: NSRect(x:rect.minX+4,y:rect.minY+4,width:3,height:max(3,rect.height-8)), xRadius:1.5,yRadius:1.5).fill()
+        let padding: CGFloat = min(4,rect.height*0.15)
+        NSBezierPath(roundedRect:NSRect(x:rect.minX+4,y:rect.minY+padding,width:3,height:max(0.5,rect.height-2*padding)),xRadius:1.5,yRadius:1.5).fill()
+        if backgroundOnly {
+            if registerHit { hits.append((rect,item)) }
+            return
+        }
         NSGraphicsContext.saveGraphicsState()
-        NSBezierPath(rect:rect.insetBy(dx:3,dy:2)).addClip()
+        NSBezierPath(rect:rect.insetBy(dx:3,dy:min(2,rect.height*0.1))).addClip()
         let contentX = rect.minX + 12
         let contentWidth = max(1,rect.width-17)
         let title = (item.writable ? "" : "🔒 ") + item.title
         let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
-        let attributes: [NSAttributedString.Key: Any] = [.font:NSFont.systemFont(ofSize:10,weight:.semibold), .foregroundColor:ink, .paragraphStyle:paragraph]
+        paragraph.lineBreakMode = rect.height < 28 ? .byTruncatingTail : .byWordWrapping
+        let fontSize: CGFloat = rect.height < 14 ? max(5,rect.height-3) : (rect.height < 24 ? 9 : 10)
+        let attributes: [NSAttributedString.Key: Any] = [.font:NSFont.systemFont(ofSize:fontSize,weight:.semibold), .foregroundColor:ink, .paragraphStyle:paragraph]
         let measured = (title as NSString).boundingRect(with:NSSize(width:contentWidth,height:1000),options:[.usesLineFragmentOrigin,.usesFontLeading],attributes:attributes).height
-        let lineHeight: CGFloat = 13
+        let lineHeight: CGFloat = ceil(fontSize*1.25)
         let titleRoom = rect.height >= 46 ? lineHeight * 2 : lineHeight
         let titleHeight = min(titleRoom, max(lineHeight,ceil(measured)))
-        (title as NSString).draw(with:NSRect(x:contentX,y:rect.minY+4,width:contentWidth,height:titleHeight),options:[.usesLineFragmentOrigin,.usesFontLeading,.truncatesLastVisibleLine],attributes:attributes)
+        (title as NSString).draw(with:NSRect(x:contentX,y:rect.minY+(rect.height < 24 ? max(0,(rect.height-lineHeight)/2) : 4),width:contentWidth,height:titleHeight),options:[.usesLineFragmentOrigin,.usesFontLeading,.truncatesLastVisibleLine],attributes:attributes)
         let timeY = rect.minY+4+titleHeight+2
         if !item.allDay && timeY+12 <= rect.maxY-3 {
             let clockSize: CGFloat = 8
@@ -407,9 +436,25 @@ struct WeekCanvas: NSViewRepresentable {
         NSGraphicsContext.restoreGraphicsState()
         if registerHit { hits.append((rect,item)) }
     }
+    private func drawProtectedTitle(_ item: CalendarEntry, frame: NSRect) {
+        let dark = effectiveAppearance.bestMatch(from:[.darkAqua,.aqua]) == .darkAqua
+        let tint = item.color.usingColorSpace(.deviceRGB) ?? item.color
+        let fill = NSColor.textBackgroundColor.blended(withFraction:dark ? 0.32 : 0.19,of:tint) ?? tint
+        let ink = tint.blended(withFraction:dark ? 0.4 : 0.48,of:dark ? .white : .black) ?? tint
+        fill.setFill()
+        let chip = NSBezierPath(roundedRect:frame,xRadius:3,yRadius:3)
+        chip.fill()
+        tint.withAlphaComponent(0.45).setStroke(); chip.lineWidth = 0.5; chip.stroke()
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect:frame).addClip()
+        text((item.writable ? "" : "🔒 ")+item.title,rect:frame.insetBy(dx:3,dy:0.5),size:min(10,max(5,frame.height-3)),color:ink,weight:.semibold)
+        NSGraphicsContext.restoreGraphicsState()
+        // Protected titles remain clickable even above another event's body.
+        hits.append((frame,item))
+    }
     private func drawCreation(at date: Date, minutes: Int) {
         let index = Calendar.current.dateComponents([.day],from:renderedStart,to:Calendar.current.startOfDay(for:date)).day ?? 0
-        let source = model.sources.first { $0.writable && model.visible.contains($0.id) } ?? model.sources.first { $0.writable }
+        let source = model.creationCalendar
         let color = source?.color ?? .controlAccentColor
         let components = Calendar.current.dateComponents([.hour,.minute],from:date)
         let minute = components.hour!*60 + components.minute!

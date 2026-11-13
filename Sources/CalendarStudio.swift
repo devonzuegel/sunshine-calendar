@@ -165,8 +165,11 @@ struct EventEditor: View {
             Text(draft.original == nil ? "New Event" : "Edit Event").font(.title2.bold())
             Form {
                 TextField("Title",text:$draft.title)
-                Picker("Calendar",selection:$draft.calendarID) {
-                    ForEach(model.sources.filter(\.writable)) { source in Text("\(source.title) · \(source.account)").tag(source.id) }
+                HStack {
+                    Text("Calendar")
+                    Spacer()
+                    CalendarColorPicker(sources:model.sources.filter(\.writable),selection:$draft.calendarID)
+                        .frame(maxWidth:350)
                 }
                 Toggle("All-day",isOn:$draft.allDay).onChange(of:draft.allDay) { _,value in
                     if value { draft.start = Calendar.current.startOfDay(for:draft.start); draft.end = Calendar.current.date(byAdding:.day,value:1,to:draft.start)! }
@@ -186,5 +189,50 @@ struct EventEditor: View {
                     .disabled(draft.title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty || draft.end <= draft.start)
             }
         }.padding(24).frame(width:480)
+    }
+}
+
+// Native menu images retain their exact calendar colors in light and dark mode.
+struct CalendarColorPicker: NSViewRepresentable {
+    var sources: [CalendarSource]
+    @Binding var selection: String
+    func makeCoordinator() -> Coordinator { Coordinator(selection:$selection) }
+    func makeNSView(context: Context) -> NSPopUpButton {
+        let popup = NSPopUpButton(frame:.zero,pullsDown:false)
+        popup.target = context.coordinator
+        popup.action = #selector(Coordinator.choose(_:))
+        popup.setAccessibilityLabel("Calendar")
+        popup.setContentCompressionResistancePriority(.defaultLow,for:.horizontal)
+        popup.cell?.lineBreakMode = .byTruncatingTail
+        return popup
+    }
+    func updateNSView(_ popup: NSPopUpButton, context: Context) {
+        context.coordinator.selection = $selection
+        popup.removeAllItems()
+        let placeholder = NSMenuItem(title:"Choose a calendar",action:nil,keyEquivalent:"")
+        placeholder.representedObject = ""
+        popup.menu?.addItem(placeholder)
+        for source in sources {
+            let item = NSMenuItem(title:"\(source.title) · \(source.account)",action:nil,keyEquivalent:"")
+            item.representedObject = source.id
+            let swatch = NSImage(size:NSSize(width:12,height:12),flipped:false) { rect in
+                source.color.setFill()
+                NSBezierPath(roundedRect:rect.insetBy(dx:1,dy:1),xRadius:2,yRadius:2).fill()
+                return true
+            }
+            swatch.isTemplate = false
+            item.image = swatch
+            popup.menu?.addItem(item)
+        }
+        if let index = popup.itemArray.firstIndex(where:{ ($0.representedObject as? String) == selection }) {
+            popup.selectItem(at:index)
+        } else { popup.selectItem(at:0) }
+    }
+    final class Coordinator: NSObject {
+        var selection: Binding<String>
+        init(selection: Binding<String>) { self.selection = selection }
+        @objc func choose(_ sender: NSPopUpButton) {
+            selection.wrappedValue = sender.selectedItem?.representedObject as? String ?? ""
+        }
     }
 }

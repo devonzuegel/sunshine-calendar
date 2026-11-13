@@ -61,6 +61,7 @@ enum CalendarMath {
     @Published var sources: [CalendarSource] = []
     @Published var visible: Set<String> = []
     @Published var selected: Set<String> = []
+    @Published private(set) var creationCalendarID: String?
     @Published var live = false
     @Published var connecting = false
     @Published var message: String?
@@ -182,9 +183,18 @@ enum CalendarMath {
         if live { UserDefaults.standard.set(Array(visible),forKey:"visibleCalendarIDs") }
         selected.formIntersection(Set(shown.map(\.id)))
     }
+    var creationCalendar: CalendarSource? {
+        let editable = sources.filter { $0.writable && !$0.title.hasPrefix("- ") }
+        return editable.first(where:{ $0.id == creationCalendarID })
+            ?? editable.first(where:{ visible.contains($0.id) }) ?? editable.first
+    }
     func select(_ id: String, extending: Bool) {
         if extending { if selected.contains(id) { selected.remove(id) } else { selected.insert(id) } }
         else if !selected.contains(id) { selected = [id] }
+        if selected.contains(id), let item = shown.first(where:{ $0.id == id }),
+           sources.contains(where:{ $0.id == item.calendarID && $0.writable && !$0.title.hasPrefix("- ") }) {
+            creationCalendarID = item.calendarID
+        }
     }
     @discardableResult func deleteSelectedEvents() -> Bool {
         let items = selection
@@ -379,7 +389,7 @@ enum CalendarMath {
         }
     }
     func newEvent(at date: Date? = nil, durationMinutes: Int = 60) {
-        guard let source = sources.first(where: { $0.writable && visible.contains($0.id) }) ?? sources.first(where: \.writable) else { message = "No editable calendars are available."; return }
+        guard let source = creationCalendar else { message = "No editable calendars are available."; return }
         let start = date ?? Calendar.current.date(bySettingHour: 13, minute: 0, second: 0, of: anchor)!
         draft = EventDraft(start: start, end: start.addingTimeInterval(Double(durationMinutes)*60), calendarID: source.id)
     }
