@@ -25,14 +25,15 @@ struct BankEditorPopover: NSViewRepresentable {
         var session: BankEditorSession?
         var escapeMonitor: Any?
         var closing = false
+        private var committing = false
         deinit { if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) } }
         func present(_ task: BankTask, model: CalendarModel, bank: EventBankStore, in view: NSView) {
             guard popover == nil else { return }
             let session = BankEditorSession(model:model,bank:bank,task:task)
             self.session = session
             let panel = NSPopover(); panel.behavior = .semitransient; panel.animates = true; panel.delegate = self
-            let host = NSHostingController(rootView:BankTaskEditor(session:session,close:{ [weak self] cancel in self?.finish(cancel:cancel) }))
-            host.sizingOptions = [.preferredContentSize]; panel.contentViewController = host
+            let host = StablePopoverController(content:BankTaskEditor(session:session,close:{ [weak self] cancel in self?.finish(cancel:cancel) }),popover:panel)
+            panel.contentViewController = host
             popover = panel
             let rect = view.bounds.isEmpty ? NSRect(x:0,y:0,width:1,height:1) : view.bounds
             panel.show(relativeTo:rect,of:view,preferredEdge:.maxX)
@@ -47,21 +48,30 @@ struct BankEditorPopover: NSViewRepresentable {
         }
         func finish(cancel: Bool) {
             guard cancel || commit() else { return }
+            (popover?.contentViewController as? StablePopoverController)?.stopResizing()
             closing = true; popover?.close(); editing?.wrappedValue = nil
             closing = false
         }
         private func commit() -> Bool {
+            guard !committing else { return false }
+            committing = true
+            defer { committing = false }
             guard popover?.contentViewController?.view.window?.makeFirstResponder(nil) != false else { return false }
             return session?.commit() ?? true
         }
         func popoverShouldClose(_ popover: NSPopover) -> Bool { closing || commit() }
+        func popoverWillClose(_ notification: Notification) {
+            (popover?.contentViewController as? StablePopoverController)?.stopResizing()
+        }
         func popoverDidClose(_ notification: Notification) {
             editing?.wrappedValue = nil
             dismiss()
         }
         func dismiss() {
             if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor); self.escapeMonitor = nil }
-            let panel = popover; popover = nil; panel?.delegate = nil; panel?.close(); session = nil
+            let panel = popover; popover = nil
+            (panel?.contentViewController as? StablePopoverController)?.stopResizing()
+            panel?.delegate = nil; panel?.close(); session = nil
         }
     }
 }

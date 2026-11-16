@@ -11,7 +11,10 @@ import AppKit
         WindowGroup("") {
             CalendarRoot(model:model,sidebarVisible:$sidebarVisible)
                 .appFont(size:13)
-                .onAppear { model.startViewKeyboardHandling() }
+                .onAppear {
+                    model.startViewKeyboardHandling()
+                    DispatchQueue.main.async { DateJumpPresenter.shared.prepare() }
+                }
                 .frame(minWidth:1000,minHeight:650)
                 .background(CalendarUndoWindowBridge(model:model).frame(width:0,height:0))
         }
@@ -38,6 +41,13 @@ import AppKit
             }
             CommandGroup(replacing:.newItem) { Button("New Event") { model.newEvent() }.keyboardShortcut("n") }
             CommandMenu("Calendar") {
+                Button("Jump to Date…") {
+                    if DateJumpPresenter.shared.isPresented { DateJumpPresenter.shared.dismiss(); return }
+                    guard model.draft == nil, NSApp.keyWindow === NSApp.mainWindow, NSApp.mainWindow?.attachedSheet == nil else { return }
+                    if let window = NSApp.mainWindow { DateJumpPresenter.shared.show(model:model,parent:window) }
+                }.keyboardShortcut("k",modifiers:.command).disabled(model.draft != nil)
+                Divider()
+
                 Button("Next Calendar View") { model.setView(model.viewMode.cycled(by:1)) }
                     .keyboardShortcut(.tab,modifiers:.control).disabled(model.draft != nil)
                 Button("Previous Calendar View") { model.setView(model.viewMode.cycled(by:-1)) }
@@ -691,6 +701,8 @@ struct EventEditorPopover: NSViewRepresentable {
         init(model: CalendarModel) { self.model = model }
         func present(in view: NSView) {
             guard let draft = model.draft else {
+                guard !savingOnDismiss else { return }
+                (popover?.contentViewController as? StablePopoverController)?.stopResizing()
                 popover?.close(); popover = nil; presentedID = nil; return
             }
             guard presentedID != draft.id, view.window != nil else { return }
@@ -703,11 +715,9 @@ struct EventEditorPopover: NSViewRepresentable {
             let editingDraft = Binding<EventDraft>(get:{ [weak self] in self?.model.draft ?? draft },set:{ [weak self] value in
                 if self?.model.draft != nil { self?.model.draft = value }
             })
-            let hosting = NSHostingController(rootView:EventEditor(model:model,draft:editingDraft,onClose:{ [weak self] in
-                self?.model.draft = nil
-                self?.popover?.close()
-            }))
-            hosting.sizingOptions = [.preferredContentSize]
+            let hosting = StablePopoverController(content:EventEditor(model:model,draft:editingDraft,onClose:{ [weak self] in
+                self?.closeEditor()
+            }),popover:panel)
             panel.contentViewController = hosting
             var anchor = model.editorAnchorInWindow.map { view.convert($0,from:nil) }
                 ?? NSRect(x:view.bounds.midX,y:view.bounds.midY,width:1,height:1)
@@ -725,13 +735,22 @@ struct EventEditorPopover: NSViewRepresentable {
                       event.window === view?.window || event.window === panel.contentViewController?.view.window,
                       NSApp.modalWindow == nil else { return event }
                 if let editor = event.window?.firstResponder as? NSTextView, editor.hasMarkedText() { return event }
-                self.model.draft = nil
-                panel.close()
+                self.closeEditor()
                 return nil
             }
         }
+        private func closeEditor() {
+            (popover?.contentViewController as? StablePopoverController)?.stopResizing()
+            model.draft = nil
+            popover?.close()
+        }
+        func popoverWillClose(_ notification: Notification) {
+            (popover?.contentViewController as? StablePopoverController)?.stopResizing()
+        }
         func popoverShouldClose(_ popover: NSPopover) -> Bool {
             guard !savingOnDismiss else { return false }
+            savingOnDismiss = true
+            defer { savingOnDismiss = false }
             guard model.draft != nil else { return true }
             // Commit an active date/text field before reading its bound value.
             guard popover.contentViewController?.view.window?.makeFirstResponder(nil) != false else { return false }
@@ -742,8 +761,6 @@ struct EventEditorPopover: NSViewRepresentable {
             if edited.original == nil && edited.title.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty {
                 model.draft = nil; return true
             }
-            savingOnDismiss = true
-            defer { savingOnDismiss = false }
             guard model.save(edited) else { return false }
             model.draft = nil
             return true

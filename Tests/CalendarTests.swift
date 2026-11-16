@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import EventKit
+import SwiftUI
 
 @main struct CalendarTests {
     @MainActor static func main() async {
@@ -39,6 +40,83 @@ import EventKit
         check(CalendarReadOnlyReason.resolve(type:.exchange,subscribed:false,account:"Work") == .accountAccess("Work"), "Exchange calendars retain their account-specific explanation")
         check(CalendarReadOnlyReason.resolve(type:.local,subscribed:false,account:"") == .unspecified && CalendarReadOnlyReason.unspecified.explanation.contains("doesn’t provide"), "Unavailable read-only reasons are explicitly identified as unknown")
         check(CalendarReadOnlyReason.accountAccess("Google").explanation.contains("macOS doesn’t say"), "Account permissions explain the limits of macOS permission metadata")
+        do {
+            let panel = NSPopover()
+            let fixture = PopoverResizeFixture()
+            let controller = StablePopoverController(content:PopoverResizeFixtureView(fixture:fixture),popover:panel)
+            panel.contentViewController = controller
+            let window = NSWindow(contentRect:NSRect(x:0,y:0,width:320,height:200),styleMask:.borderless,backing:.buffered,defer:false)
+            window.contentView = controller.view
+            controller.view.layoutSubtreeIfNeeded()
+            try? await Task.sleep(nanoseconds:30_000_000)
+            check(controller.hosting.sizingOptions == [.intrinsicContentSize], "Editor popovers disable automatic hosting-window resizing and use a plain AppKit controller")
+            let originalSize = controller.appliedSize
+            fixture.height = 240
+            controller.requestSize(CGSize(width:320,height:240))
+            fixture.height = 280
+            controller.requestSize(CGSize(width:320,height:280))
+            check(controller.appliedSize == originalSize, "Popover resize requests do not resize synchronously during a layout callback")
+            try? await Task.sleep(nanoseconds:20_000_000)
+            check(controller.appliedSize == CGSize(width:320,height:280), "Multiple layout changes coalesce to the latest measured editor size")
+            for index in 0..<40 {
+                fixture.height = CGFloat(200+index%5*20)
+                controller.requestSize(CGSize(width:320,height:fixture.height))
+                controller.view.layoutSubtreeIfNeeded()
+                try? await Task.sleep(nanoseconds:2_000_000)
+            }
+            check(controller.appliedSize.width == 320 && controller.resizingEnabled, "Repeated editor size changes remain stable without recursive window sizing")
+            fixture.height = 340
+            controller.hosting.needsLayout = true
+            controller.hosting.layoutSubtreeIfNeeded()
+            if let bitmap = controller.hosting.bitmapImageRepForCachingDisplay(in:controller.hosting.bounds) { controller.hosting.cacheDisplay(in:controller.hosting.bounds,to:bitmap) }
+            try? await Task.sleep(nanoseconds:30_000_000)
+            check(controller.appliedSize == CGSize(width:320,height:340), "Natural content growth is measured without automatic hosting-window sizing")
+            let beforeClose = controller.appliedSize
+            controller.requestSize(CGSize(width:320,height:600))
+            controller.stopResizing()
+            controller.requestSize(CGSize(width:320,height:700))
+            try? await Task.sleep(nanoseconds:20_000_000)
+            check(!controller.resizingEnabled && controller.appliedSize == beforeClose, "Closing an editor cancels queued size changes and ignores late focus-layout callbacks")
+            check(StablePopoverController.validSize(CGSize(width:CGFloat.infinity,height:200)) == nil && StablePopoverController.validSize(.zero) == nil, "Invalid layout measurements cannot resize a popover window")
+        }
+        do {
+            var calendar = Calendar(identifier:.gregorian); calendar.timeZone = TimeZone(identifier:"America/Los_Angeles")!
+            let reference = calendar.date(from:DateComponents(year:2026,month:11,day:15))!
+            let december11 = calendar.date(from:DateComponents(year:2026,month:12,day:11))!
+            for input in ["12/11","12-11","Dec 11","dec11","DECEMBER11","11 Dec","11dec","Dec 11th","  dec11  ","Dec. 11"] {
+                check(DateJumpParser.parse(input,reference:reference,calendar:calendar) == december11, "Flexible date jump parses \(input) as December 11")
+            }
+            let nextYear = calendar.date(from:DateComponents(year:2027,month:12,day:11))!
+            for input in ["12/11/2027","12/11/27","Dec 11, 2027","11 December 2027","2027-12-11"] {
+                check(DateJumpParser.parse(input,reference:reference,calendar:calendar) == nextYear, "Date jump respects an explicit year in \(input)")
+            }
+            for input in ["","whatevs","2/30","13/11","Dec 32","Feb 29, 2026","Dec 11 extra"] {
+                check(DateJumpParser.parse(input,reference:reference,calendar:calendar) == nil, "Invalid date jump input is rejected: \(input)")
+            }
+            check(DateJumpParser.parse("today",reference:reference,calendar:calendar) == reference, "Date jump understands today")
+            check(DateJumpParser.parse("tomorrow",reference:reference,calendar:calendar) == calendar.date(byAdding:.day,value:1,to:reference), "Date jump understands tomorrow")
+            check(DateJumpParser.parse("yesterday",reference:reference,calendar:calendar) == calendar.date(byAdding:.day,value:-1,to:reference), "Date jump understands yesterday")
+            check(DateJumpParser.parse("Feb29 2028",reference:reference,calendar:calendar) == calendar.date(from:DateComponents(year:2028,month:2,day:29)), "Date jump accepts valid leap days")
+        }
+        do {
+            let session = DateJumpSession()
+            var calendar = Calendar(identifier:.gregorian); calendar.timeZone = TimeZone(identifier:"America/Los_Angeles")!
+            let reference = calendar.date(from:DateComponents(year:2026,month:11,day:15))!
+            session.reset(calendar:calendar,reference:reference)
+            session.query = "dec11"
+            check(session.result == calendar.date(from:DateComponents(year:2026,month:12,day:11)), "Date palette stores the parsed result when input changes")
+            session.query = "not a date"
+            check(session.result == nil, "Invalid palette input clears a previously valid result")
+            let previousGeneration = session.generation
+            session.reset(calendar:calendar,reference:reference)
+            check(session.query.isEmpty && session.result == nil && session.generation != previousGeneration, "Reopening the cached palette starts a fresh focused input session")
+            let presenter = DateJumpPresenter()
+            presenter.prepare()
+            let firstPanel = presenter.panel
+            presenter.prepare()
+            check(firstPanel === presenter.panel && presenter.panel?.isVisible == false, "The palette reuses its prepared window without showing or rebuilding it")
+            check(DateJumpParser.parse(String(repeating:"a",count:1000),reference:reference,calendar:calendar) == nil, "Oversized pasted input does not perform expensive date parsing")
+        }
         let pickerSources = [
             CalendarSource(id:"gmail-health",title:"Health 👟",account:"DevonZuegel@gmail.com",color:.systemPink,writable:true),
             CalendarSource(id:"google-elc",title:"Devon ELC",account:"Google",color:.systemGreen,writable:false),
@@ -1434,4 +1512,12 @@ private final class SuccessfulWeatherProtocol: URLProtocol {
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() { }
+}
+
+@MainActor private final class PopoverResizeFixture: ObservableObject {
+    @Published var height: CGFloat = 200
+}
+private struct PopoverResizeFixtureView: View {
+    @ObservedObject var fixture: PopoverResizeFixture
+    var body: some View { Text("Editor sizing regression").frame(width:320,height:fixture.height).fixedSize() }
 }
