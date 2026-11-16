@@ -1,0 +1,21 @@
+{
+  "method": "Median of 3 runs; identical unoptimized Swift compiler settings; synthetic data only",
+  "before": {
+    "event_labels_3000": 90.37,
+    "localized_date_labels_3000": 90.33,
+    "weather_day_lookups_10000": 305.05,
+    "bank_ordered_reads_1000": 743.09,
+    "unchanged_bank_refreshes_5": 5.92,
+    "unchanged_bank_publications": 10.0,
+    "checksum": 4975150.0
+  },
+  "after": {
+    "event_labels_3000": 9.21,
+    "localized_date_labels_3000": 4.65,
+    "weather_day_lookups_10000": 1.3,
+    "bank_ordered_reads_1000": 13.83,
+    "unchanged_bank_refreshes_5": 2.03,
+    "unchanged_bank_publications": 0.0,
+    "checksum": 4975150.0
+  }
+}

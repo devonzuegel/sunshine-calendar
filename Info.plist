@@ -10,8 +10,9 @@
 <key>CFBundleShortVersionString</key><string>0.1</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
-<key>NSLocationUsageDescription</key><string>Sunshine Calendar uses your location to shade calendar hours before sunrise and after sunset. Sun times are calculated on your Mac.</string>
-<key>NSLocationWhenInUseUsageDescription</key><string>Sunshine Calendar uses your location to shade calendar hours before sunrise and after sunset. Sun times are calculated on your Mac.</string>
+<key>NSAppleEventsUsageDescription</key><string>Sunshine Calendar reveals the selected invitation in Apple Calendar so you can accept, decline, or respond Maybe. Your response is sent only when you choose it in Calendar.</string>
+<key>NSLocationUsageDescription</key><string>Sunshine Calendar uses your location for local weather forecasts and sunrise/sunset times. Sun times are calculated on your Mac.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>Sunshine Calendar uses your location for local weather forecasts and sunrise/sunset times. Sun times are calculated on your Mac.</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>NSCalendarsFullAccessUsageDescription</key><string>Sunshine Calendar shows your calendars and lets you create, edit, and move selected events together.</string>
 <key>UTExportedTypeDeclarations</key><array><dict>

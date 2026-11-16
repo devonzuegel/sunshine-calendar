@@ -17,8 +17,12 @@ build_stage=$(mktemp -d "$PWD/build/.calendar-build.XXXXXX")
 trap 'rm -rf "$build_stage"' EXIT
 app_stage="$build_stage/Sunshine Calendar.app"
 mkdir -p "$app_stage/Contents/MacOS" "$app_stage/Contents/Resources"
-CLANG_MODULE_CACHE_PATH="$PWD/build/ModuleCache" swiftc -parse-as-library -swift-version 5 -target arm64-apple-macos14.0 -module-cache-path "$PWD/build/ModuleCache" Sources/*.swift -o "$app_stage/Contents/MacOS/CalendarStudio" -framework SwiftUI -framework AppKit -framework EventKit -framework CoreLocation
+CLANG_MODULE_CACHE_PATH="$PWD/build/ModuleCache" swiftc -O -parse-as-library -swift-version 5 -target arm64-apple-macos14.0 -module-cache-path "$PWD/build/ModuleCache" Sources/*.swift -o "$app_stage/Contents/MacOS/CalendarStudio" -framework SwiftUI -framework AppKit -framework EventKit -framework CoreLocation -framework MapKit
 cp Info.plist "$app_stage/Contents/Info.plist"
+cp Resources/zone.tab "$app_stage/Contents/Resources/zone.tab"
+cp Resources/TimezoneLand.geojson Resources/TimezoneLand-attribution.txt Resources/EmojiCatalog.json Resources/EmojiCatalog-LICENSE.txt "$app_stage/Contents/Resources/"
+cp -R Resources/AttributionIcons "$app_stage/Contents/Resources/AttributionIcons"
+cp -R Resources/FieldIcons "$app_stage/Contents/Resources/FieldIcons"
 cp Resources/Relaunch.sh "$app_stage/Contents/Resources/Relaunch.sh"
 cp Resources/CalendarStudio.icns "$app_stage/Contents/Resources/CalendarStudio.icns"
 codesign --force --sign "$signing_identity" --identifier com.devon.calendarstudio "$app_stage"

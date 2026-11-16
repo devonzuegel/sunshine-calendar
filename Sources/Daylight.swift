@@ -7,6 +7,13 @@ struct SunCoordinate: Equatable {
     let longitude: Double
 }
 
+enum TwilightMode: String, CaseIterable, Identifiable {
+    case civil, astronomical
+    var id: String { rawValue }
+    var label: String { self == .civil ? "Civil twilight" : "Full astronomical twilight" }
+    var darkestElevation: Double { self == .civil ? -6 : -18 }
+}
+
 enum DaylightMath {
     // NOAA General Solar Position Calculations, 90.833° apparent sunrise.
     // https://www.gml.noaa.gov/grad/solcalc/solareqns.PDF
@@ -23,6 +30,55 @@ enum DaylightMath {
         let angle = (solarMinutes/4 - 180) * Double.pi/180
         let latitude = coordinate.latitude * Double.pi/180
         return sin(latitude)*sin(declination) + cos(latitude)*cos(declination)*cos(angle)
+    }
+    static func solarElevation(at date: Date, coordinate: SunCoordinate) -> Double {
+        asin(max(-1,min(1,solarHeight(at:date,coordinate:coordinate)))) * 180 / .pi
+    }
+    // Civil twilight: darkness follows solar depression below apparent sunset,
+    // reaching its maximum at the established -6° civil-twilight boundary.
+    // This encodes solar geometry, not a fixed-duration fade or measured lux.
+    static func darkness(elevation: Double, mode: TwilightMode) -> Double {
+        min(1,max(0,(-0.833-elevation)/(-mode.darkestElevation-0.833)))
+    }
+    static func civilDarkness(elevation: Double) -> Double { darkness(elevation:elevation,mode:.civil) }
+    static func civilTwilightRanges(profile: [Double]) -> [ClosedRange<Double>] { twilightRanges(profile:profile,mode:.civil) }
+    static func twilightRanges(profile: [Double], mode: TwilightMode) -> [ClosedRange<Double>] {
+        guard profile.count > 1 else { return [] }
+        let step = 1440/Double(profile.count-1)
+        var ranges: [ClosedRange<Double>] = []
+        var beginning: Double?
+        for (index,elevation) in profile.enumerated() {
+            let twilight = elevation > mode.darkestElevation && elevation < -0.833
+            if twilight && beginning == nil { beginning = max(0,Double(index-1)*step) }
+            if !twilight, let start = beginning { ranges.append(start...min(1440,Double(index)*step)); beginning = nil }
+        }
+        if let beginning { ranges.append(beginning...1440) }
+        return ranges
+    }
+    static func sunTransitions(on day: Date, coordinate: SunCoordinate, calendar: Calendar = .current) -> [(minute: Double, sunrise: Bool)] {
+        let ranges = nightRanges(on:day,coordinate:coordinate,calendar:calendar)
+        var result: [(Double,Bool)] = []
+        for range in ranges {
+            if range.lowerBound > 0 { result.append((range.lowerBound,false)) }
+            if range.upperBound < 1440 { result.append((range.upperBound,true)) }
+        }
+        return result.sorted { $0.0 < $1.0 }
+    }
+    static func peakMinute(profile: [Double]) -> Double? {
+        guard profile.count > 1, let peak = profile.indices.max(by:{ profile[$0] < profile[$1] }) else { return nil }
+        let step = 1440/Double(profile.count-1)
+        guard peak > 0, peak < profile.count-1 else { return Double(peak)*step }
+        let a = profile[peak-1], b = profile[peak], c = profile[peak+1]
+        let denominator = a-2*b+c
+        let adjustment = abs(denominator) > 0.0000001 ? max(-0.5,min(0.5,0.5*(a-c)/denominator)) : 0
+        return (Double(peak)+adjustment)*step
+    }
+    static func elevationProfile(on day: Date, coordinate: SunCoordinate, calendar: Calendar = .current) -> [Double] {
+        let start = calendar.startOfDay(for:day)
+        return stride(from:0,through:1440,by:5).map { minute in
+            let instant = minute == 1440 ? calendar.date(byAdding:.day,value:1,to:start)! : calendar.date(bySettingHour:minute/60,minute:minute%60,second:0,of:start)!
+            return solarElevation(at:instant,coordinate:coordinate)
+        }
     }
     // Ranges in wall-clock minutes match the calendar's 24-hour drawing grid.
     // Sampling absolute instants built in the display timezone also handles DST,
@@ -54,6 +110,9 @@ enum DaylightMath {
 }
 
 @MainActor final class DaylightLocation: NSObject, ObservableObject, @preconcurrency CLLocationManagerDelegate {
+    @Published var twilightMode = TwilightMode(rawValue:UserDefaults.standard.string(forKey:"twilightMode") ?? "") ?? .astronomical {
+        didSet { UserDefaults.standard.set(twilightMode.rawValue,forKey:"twilightMode") }
+    }
     @Published private(set) var coordinate: SunCoordinate?
     @Published private(set) var status = "Daylight uses your Mac’s location"
     @Published var enabled = UserDefaults.standard.object(forKey:"daylightShading") as? Bool ?? true {
@@ -104,6 +163,66 @@ enum DaylightMath {
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         requesting = false; status = coordinate == nil ? "Location unavailable · try refreshing" : "Using last location · refresh unavailable"
     }
+    static func ribbonCoordinate(for identifier: String) -> SunCoordinate? {
+        // These timezone shortcuts intentionally represent the labeled city.
+        switch identifier {
+        case "America/New_York": return SunCoordinate(latitude:25.7617,longitude:-80.1918) // Miami
+        case "America/Los_Angeles": return SunCoordinate(latitude:37.7749,longitude:-122.4194)
+        case "America/Argentina/Buenos_Aires", "America/Buenos_Aires": return SunCoordinate(latitude:-34.6037,longitude:-58.3816)
+        case "America/Denver": return SunCoordinate(latitude:39.7392,longitude:-104.9903)
+        case "America/Chicago": return SunCoordinate(latitude:41.8781,longitude:-87.6298)
+        default: return nil
+        }
+    }
+    @Published private var ribbonCoordinates: [String: SunCoordinate] = [:]
+    private var requestedRibbonLocations: Set<String> = []
+    func prepareRibbonLocations(_ zones: [TimeZone]) {
+        for zone in zones where Self.ribbonCoordinate(for:zone.identifier) == nil && !requestedRibbonLocations.contains(zone.identifier) {
+            requestedRibbonLocations.insert(zone.identifier)
+            let city = zone.identifier.split(separator:"/").last.map(String.init)?.replacingOccurrences(of:"_",with:" ") ?? zone.identifier
+            Task {
+                let geocoder = CLGeocoder()
+                do {
+                    if let location = try await geocoder.geocodeAddressString(city).first?.location {
+                        ribbonCoordinates[zone.identifier] = SunCoordinate(latitude:location.coordinate.latitude,longitude:location.coordinate.longitude)
+                    }
+                } catch { requestedRibbonLocations.remove(zone.identifier) }
+            }
+        }
+    }
+    func hasRibbonLocation(_ zone: TimeZone) -> Bool {
+        Self.ribbonCoordinate(for:zone.identifier) != nil || ribbonCoordinates[zone.identifier] != nil
+    }
+    func ribbonNightRanges(zone: TimeZone, primaryCalendar: Calendar, today: Date = Date()) -> [ClosedRange<Double>] {
+        guard enabled, let coordinate = Self.ribbonCoordinate(for:zone.identifier) ?? ribbonCoordinates[zone.identifier] else { return [] }
+        let day = primaryCalendar.startOfDay(for:today)
+        let key = "ribbon-\(zone.identifier)-\(primaryCalendar.timeZone.identifier)-\(day.timeIntervalSince1970)"
+        if let cached = cache[key] { return cached }
+        let ranges = DaylightMath.nightRanges(on:day,coordinate:coordinate,calendar:primaryCalendar)
+        if cache.count > 100 { cache = [:] }
+        cache[key] = ranges
+        return ranges
+    }
+    func sunTransitions(on day: Date, calendar: Calendar, ribbonZone: TimeZone? = nil) -> [(minute: Double, sunrise: Bool)] {
+        guard enabled else { return [] }
+        let location = ribbonZone.map { Self.ribbonCoordinate(for:$0.identifier) ?? ribbonCoordinates[$0.identifier] } ?? coordinate
+        guard let location else { return [] }
+        return DaylightMath.sunTransitions(on:day,coordinate:location,calendar:calendar)
+    }
+    private var elevationCache: [String: [Double]] = [:]
+    func elevationProfile(on day: Date, calendar: Calendar, ribbonZone: TimeZone? = nil) -> [Double]? {
+        guard enabled else { return nil }
+        let location: SunCoordinate?
+        if let ribbonZone { location = Self.ribbonCoordinate(for:ribbonZone.identifier) ?? ribbonCoordinates[ribbonZone.identifier] }
+        else { location = coordinate }
+        guard let location else { return nil }
+        let key = "\(calendar.startOfDay(for:day).timeIntervalSince1970)-\(calendar.timeZone.identifier)-\(location.latitude)-\(location.longitude)"
+        if let cached = elevationCache[key] { return cached }
+        let values = DaylightMath.elevationProfile(on:day,coordinate:location,calendar:calendar)
+        if elevationCache.count > 80 { elevationCache = [:] }
+        elevationCache[key] = values
+        return values
+    }
     func ranges(on day: Date, calendar: Calendar = .current) -> [ClosedRange<Double>] {
         guard enabled, let coordinate else { return [] }
         let key = "\(calendar.startOfDay(for:day).timeIntervalSince1970)-\(calendar.timeZone.identifier)"
@@ -117,15 +236,20 @@ enum DaylightMath {
 
 struct DaylightMenu: View {
     @ObservedObject var daylight: DaylightLocation
+    var displayTimeZone: TimeZone = .current
     var body: some View {
         Menu {
             Toggle("Shade nighttime hours",isOn:$daylight.enabled)
                 .onChange(of:daylight.enabled) { _,enabled in if enabled { daylight.refresh() } }
+            Picker("Twilight gradient",selection:$daylight.twilightMode) {
+                ForEach(TwilightMode.allCases) { mode in Text(mode.label).tag(mode) }
+            }
             Text(daylight.status)
-            Text("Timezone: \(TimeZone.current.identifier)")
+            Text("Timezone: \(displayTimeZone.identifier)")
             Button("Refresh Mac Location") { daylight.refresh() }
-        } label: { Image(systemName:"sun.max") }
-        .help(daylight.status + " · " + TimeZone.current.identifier)
+        } label: { ToolbarControlLabel(symbol:"sun.max",title:"Daylight",dropdown:true) }
+        .menuIndicator(.hidden)
+        .appHelp(daylight.status + " · " + displayTimeZone.identifier)
         .onAppear { daylight.start() }
     }
 }
